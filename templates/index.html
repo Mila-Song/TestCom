@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI电商视觉智能工作台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <main class="shell">
+    <header class="card hero">
+      <div>
+        <h1 class="hero-brand">
+          <img class="hero-logo" src="/file/logo?v=20260417" alt="logo" />
+          <span>AI电商视觉智能工作台</span>
+        </h1>
+        <div class="hint-inline" style="margin-top:6px;">
+          当前用户：<b>{{ current_username }}</b>
+          {% if is_admin %}
+          · <a href="/admin/users" style="color:#1d5bb2;text-decoration:none;">用户管理</a>
+          {% endif %}
+        </div>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <a class="btn" href="/account">账户设置</a>
+        <form method="post" action="/auth/logout">
+          <button class="btn" type="submit">退出登录</button>
+        </form>
+      </div>
+    </header>
+
+    <section class="card tabs">
+      <button class="tab active" data-tab="optimize">AI图片优化</button>
+      <button class="tab" data-tab="generate">AI图片生成</button>
+      <button class="tab" data-tab="wm">AI去水印</button>
+      <button class="tab" data-tab="bg">AI换背景</button>
+      <button class="tab" data-tab="layer">图片在线编辑</button>
+      <button class="tab" data-tab="gallery">素材库</button>
+    </section>
+
+    <section id="pane-optimize" class="card pane active">
+      <h2>AI图片优化</h2>
+      <p class="hint">先完成提示词，再按提示词优化现有图片。</p>
+      <div class="guide-strip">
+        <span class="guide-pill">步骤 1：填写卖点并生成提示词</span>
+        <span class="guide-pill">步骤 2：按提示词优化现有图片</span>
+      </div>
+
+      <div class="feature-block builder-block">
+        <h3>步骤 1：生成与编辑提示词</h3>
+        <div class="form-grid four">
+          <input id="p-product-name" placeholder="产品名称，如：轻盐苏打饼干" />
+          <select id="gen-size">
+            <option value="750x750">750x750（电商主图）</option>
+            <option value="800x800">800x800（平台通用）</option>
+            <option value="1024x1024">1024x1024</option>
+            <option value="1242x1660">1242x1660（竖版详情）</option>
+            <option value="1920x1080">1920x1080（横版海报）</option>
+            <option value="1080x1920">1080x1920（短视频封面）</option>
+            <option value="1024x768">1024x768</option>
+            <option value="768x1024">768x1024</option>
+            <option value="custom">自定义尺寸</option>
+          </select>
+          <input id="gen-custom-width" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义宽度" style="display:none;" />
+          <input id="gen-custom-height" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义高度" style="display:none;" />
+        </div>
+        <p class="hint">建议先填卖点再生成提示词。尺寸会写入提示词并用于生成；自定义尺寸范围 256-2048。</p>
+        <div class="form-grid two">
+          <select id="p-mode">
+            <option value="template">模板模式（稳定）</option>
+            <option value="hybrid">模板+LLM混合模式（更智能）</option>
+          </select>
+          <div id="p-mode-tip" class="hint-inline">建议先用模板模式，满意后切混合模式精修。</div>
+        </div>
+
+        <div class="form-grid one">
+          <input id="p-selling-primary" placeholder="主要卖点（建议含：产品名称/核心卖点）" />
+        </div>
+        <div class="form-grid one">
+          <input id="p-selling-secondary" placeholder="次要卖点（建议含：适用人群/期望场景）" />
+        </div>
+        <div class="form-grid one">
+          <textarea id="p-selling-other" rows="3" placeholder="其他卖点（建议含具体参数等）"></textarea>
+        </div>
+
+        <input id="image-overlay-text" placeholder="图片上要展示的文字（可选；留空则不展示任何文字）" />
+        <div class="form-grid one">
+          <button class="btn primary" id="p-build">生成提示词</button>
+        </div>
+        <textarea id="gen-prompt" rows="3" placeholder="这里会生成提示词，也可手动修改"></textarea>
+      </div>
+
+      <div class="feature-block gen-step-card">
+        <div class="gen-step-head">
+          <span class="gen-step-kicker">步骤 2</span>
+          <h3>按提示词优化现有图片</h3>
+        </div>
+        <p class="hint">选择一张已有素材图，直接用上方提示词进行优化（图生图），适合“在原图基础上改风格/改质感/改背景”。</p>
+        <div class="form-grid one">
+          <select id="gen-opt-asset">
+            <option value="">选择要优化的图片</option>
+          </select>
+        </div>
+        <div class="form-grid two compact-two">
+          <input id="gen-opt-strength" type="number" min="0" max="1" step="0.05" value="0.65" placeholder="优化强度 0-1" />
+          <div class="hint-inline stable-inline">每次固定生成 1 张</div>
+        </div>
+        <p class="hint">`0.65` 是优化强度：越接近 `1` 改动越明显，越接近 `0` 越保留原图。默认保留商品主体，只按提示词优化画面表现。建议每次生成一张图片。</p>
+        <div class="form-grid one feature-cta gen-step-cta">
+          <button class="btn primary" id="gen-opt-run">按提示词优化图片</button>
+        </div>
+        <div id="gen-opt-result" class="grid"></div>
+      </div>
+      <div id="opt-progress" class="op-progress" style="display:none;">
+        <div class="op-progress-head">
+          <span id="opt-progress-text">处理中...</span>
+          <span id="opt-progress-percent">0%</span>
+        </div>
+        <div class="op-progress-track">
+          <div id="opt-progress-bar" class="op-progress-bar"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-generate" class="card pane">
+      <h2>AI图片生成</h2>
+      <p class="hint">先完成提示词，再按提示词直接生成图片。</p>
+      <div class="guide-strip">
+        <span class="guide-pill">步骤 1：填写卖点并生成提示词</span>
+        <span class="guide-pill">步骤 2：按提示词直接生成图片</span>
+      </div>
+
+      <div class="feature-block builder-block">
+        <h3>步骤 1：生成与编辑提示词</h3>
+        <div class="form-grid four">
+          <input id="g-product-name" placeholder="产品名称，如：轻盐苏打饼干" />
+          <select id="g-size">
+            <option value="750x750">750x750（电商主图）</option>
+            <option value="800x800">800x800（平台通用）</option>
+            <option value="1024x1024">1024x1024</option>
+            <option value="1242x1660">1242x1660（竖版详情）</option>
+            <option value="1920x1080">1920x1080（横版海报）</option>
+            <option value="1080x1920">1080x1920（短视频封面）</option>
+            <option value="1024x768">1024x768</option>
+            <option value="768x1024">768x1024</option>
+            <option value="custom">自定义尺寸</option>
+          </select>
+          <input id="g-custom-width" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义宽度" style="display:none;" />
+          <input id="g-custom-height" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义高度" style="display:none;" />
+        </div>
+        <p class="hint">建议先填卖点再生成提示词。尺寸会写入提示词并用于生成；自定义尺寸范围 256-2048。</p>
+        <div class="form-grid two">
+          <select id="g-mode">
+            <option value="template">模板模式（稳定）</option>
+            <option value="hybrid">模板+LLM混合模式（更智能）</option>
+          </select>
+          <div id="g-mode-tip" class="hint-inline">建议先用模板模式，满意后切混合模式精修。</div>
+        </div>
+        <div class="form-grid one">
+          <input id="g-selling-primary" placeholder="主要卖点（建议含：产品名称/核心卖点）" />
+        </div>
+        <div class="form-grid one">
+          <input id="g-selling-secondary" placeholder="次要卖点（建议含：适用人群/期望场景）" />
+        </div>
+        <div class="form-grid one">
+          <textarea id="g-selling-other" rows="3" placeholder="其他卖点（建议含具体参数等）"></textarea>
+        </div>
+        <input id="g-image-overlay-text" placeholder="图片上要展示的文字（可选；留空则不展示任何文字）" />
+        <div class="form-grid one">
+          <button class="btn primary" id="g-build">生成提示词</button>
+        </div>
+        <textarea id="g-prompt" rows="3" placeholder="这里会生成提示词，也可手动修改"></textarea>
+      </div>
+
+      <div class="feature-block gen-step-card">
+        <div class="gen-step-head">
+          <span class="gen-step-kicker">步骤 2</span>
+          <h3>按提示词直接生成图片</h3>
+        </div>
+        <p class="hint">直接基于提示词生成全新图片，每次固定生成 1 张。生成结果会自动加入素材库，可在素材库中重命名、下载和删除。</p>
+        <div class="form-grid one feature-cta gen-step-cta">
+          <button class="btn primary" id="g-run">按提示词生成图片</button>
+        </div>
+        <div id="g-run-result" class="grid"></div>
+      </div>
+      <div id="gen-progress" class="op-progress" style="display:none;">
+        <div class="op-progress-head">
+          <span id="gen-progress-text">处理中...</span>
+          <span id="gen-progress-percent">0%</span>
+        </div>
+        <div class="op-progress-track">
+          <div id="gen-progress-bar" class="op-progress-bar"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-wm" class="card pane">
+      <h2>AI去水印</h2>
+      <p class="hint">先选择素材，再执行批量去水印。系统会依次处理，结果自动进入素材库。</p>
+      <div class="guide-strip">
+        <span class="guide-pill">步骤 1：选择素材（支持多选）</span>
+        <span class="guide-pill">步骤 2：执行去水印</span>
+      </div>
+
+      <div class="feature-columns bg-columns">
+        <div class="feature-block">
+          <h3>步骤 1：选择要处理的图片</h3>
+          <div class="form-grid two">
+            <button class="btn primary" id="wm-pick-assets">从素材库选择（多选）</button>
+            <button class="btn" id="wm-clear-assets">清空已选</button>
+          </div>
+          <div class="hint-inline">已选择 <b id="wm-selected-count">0 张</b> 图片</div>
+          <input id="wm-asset-ids" type="hidden" />
+          <textarea id="wm-asset-names" rows="4" placeholder="这里会显示已选择的图片名称（仅展示）" readonly></textarea>
+          <div id="wm-picker-panel" class="picker-panel"></div>
+        </div>
+
+        <div class="feature-block">
+          <h3>步骤 2：执行去水印</h3>
+          <div class="form-grid one">
+            <button class="btn primary" id="wm-run">批量去水印</button>
+          </div>
+          <div id="wm-progress" class="op-progress" style="display:none;">
+            <div class="op-progress-head">
+              <span id="wm-progress-text">处理中...</span>
+              <span id="wm-progress-percent">0%</span>
+            </div>
+            <div class="op-progress-track">
+              <div id="wm-progress-bar" class="op-progress-bar"></div>
+            </div>
+          </div>
+          <div id="wm-result" class="grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-bg" class="card pane">
+      <h2>AI换背景</h2>
+      <p class="hint">先选择素材，再填写背景描述后执行执行一键换背景。系统会依次处理，结果自动进入素材库。</p>
+      <div class="guide-strip">
+        <span class="guide-pill">步骤 1：选择素材（支持多选）</span>
+        <span class="guide-pill">步骤 2：执行换背景</span>
+      </div>
+
+      <div class="feature-columns bg-columns">
+        <div class="feature-block">
+          <h3>步骤 1：选择要处理的图片</h3>
+          <div class="form-grid two">
+            <button class="btn primary" id="bg-pick-assets">从素材库选择（多选）</button>
+            <button class="btn" id="bg-clear-assets">清空已选</button>
+          </div>
+          <div class="hint-inline">已选择 <b id="bg-selected-count">0 张</b> 图片</div>
+          <input id="bg-asset-ids" type="hidden" />
+          <textarea id="bg-asset-names" rows="4" placeholder="这里会显示已选择的图片名称（仅展示）" readonly></textarea>
+          <div id="bg-picker-panel" class="picker-panel"></div>
+        </div>
+
+        <div class="feature-block">
+          <h3>步骤 2：执行换背景</h3>
+          <div class="form-grid one">
+            <textarea id="bg-prompt" rows="4" placeholder="背景描述，如：浅灰渐变摄影棚背景，柔和阴影，产品居中"></textarea>
+          </div>
+          <div class="form-grid one">
+            <button class="btn primary" id="bg-run">一键换背景</button>
+          </div>
+          <div id="bg-progress" class="op-progress" style="display:none;">
+            <div class="op-progress-head">
+              <span id="bg-progress-text">处理中...</span>
+              <span id="bg-progress-percent">0%</span>
+            </div>
+            <div class="op-progress-track">
+              <div id="bg-progress-bar" class="op-progress-bar"></div>
+            </div>
+          </div>
+          <div id="bg-result" class="grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="pane-layer" class="card pane">
+      <h2>图片在线编辑</h2>
+      <p class="hint">选择素材后直接进入在线编辑，可调整画面效果、加文字、下载或保存到素材库。</p>
+
+      <div class="form-grid two">
+        <select id="layer-asset"></select>
+        <button class="btn primary" id="layer-compose">保存编辑结果</button>
+      </div>
+      <div id="layer-selected-box" class="hint-inline">未选择素材</div>
+
+      <div class="layer-editor">
+        <div class="layer-canvas-wrap">
+          <div class="layer-canvas-stage" id="layer-canvas-stage">
+            <canvas id="layer-canvas" width="960" height="640"></canvas>
+          </div>
+        </div>
+        <div class="layer-side">
+          <div class="form-grid two">
+            <button class="btn" id="layer-undo">撤销</button>
+            <button class="btn" id="layer-redo">重做</button>
+          </div>
+          <div class="hint-inline">主体：缩放（左） / 旋转（右）</div>
+          <div class="form-grid two">
+            <input id="layer-scale" type="range" min="0.5" max="2" step="0.01" value="1" />
+            <input id="layer-rotate" type="range" min="-45" max="45" step="1" value="0" />
+          </div>
+          <div class="form-grid two">
+            <button class="btn" id="layer-flip-x">左右翻转主体</button>
+            <button class="btn" id="layer-flip-y">上下翻转主体</button>
+          </div>
+          <div class="hint-inline">主体透明度</div>
+          <div class="form-grid one">
+            <input id="layer-opacity" type="range" min="0.1" max="1" step="0.01" value="1" />
+          </div>
+          <div class="hint-inline">画面：亮度（左） / 对比度（右）</div>
+          <div class="form-grid two">
+            <input id="layer-brightness" type="range" min="50" max="150" step="1" value="100" />
+            <input id="layer-contrast" type="range" min="50" max="150" step="1" value="100" />
+          </div>
+          <div class="hint-inline">画面饱和度</div>
+          <div class="form-grid one">
+            <input id="layer-saturation" type="range" min="50" max="150" step="1" value="100" />
+          </div>
+          <div class="form-grid one">
+            <input id="txt-content" placeholder="叠加文案，如：限时直降 30%" />
+          </div>
+          <div class="form-grid one">
+            <button class="btn" id="layer-insert-text">插入文字</button>
+          </div>
+          <div class="form-grid one">
+            <select id="text-layer-list" size="5"></select>
+          </div>
+          <div class="form-grid two">
+            <button class="btn" id="text-layer-select">选中图层</button>
+            <button class="btn" id="text-layer-delete">删除图层</button>
+          </div>
+          <div class="form-grid one">
+            <input id="txt-size" type="number" value="36" min="12" max="160" placeholder="字号" />
+          </div>
+          <div class="form-grid one">
+            <label style="display:flex;align-items:center;gap:8px;">
+              <input id="txt-nowrap" type="checkbox" />
+              不自动换行（仅按手动换行显示）
+            </label>
+          </div>
+          <div class="form-grid two">
+            <select id="txt-font">
+              <option value="noto">思源黑体（默认）</option>
+              <option value="song">宋体风格</option>
+              <option value="hei">黑体风格</option>
+              <option value="kai">楷体风格</option>
+              <option value="manrope">Manrope (EN)</option>
+            </select>
+            <label class="color-picker-field" for="txt-color">
+              <span>文字颜色</span>
+              <input id="txt-color" type="color" value="#22344a" />
+            </label>
+          </div>
+          <div class="form-grid two">
+            <button class="btn" id="layer-cutout">自动抠图主体</button>
+            <button class="btn" id="layer-cutout-save">保存抠图主体</button>
+          </div>
+          <div class="form-grid one">
+            <button class="btn" id="layer-cutout-box-mode">框选截取区域（拖拽鼠标）</button>
+          </div>
+          <div class="form-grid two">
+            <select id="layer-overlay-asset">
+              <option value="">选择要叠加的素材</option>
+            </select>
+            <button class="btn" id="layer-add-overlay">叠加素材</button>
+          </div>
+          <div class="form-grid one">
+            <button class="btn" id="layer-remove-overlay">移除叠加素材</button>
+          </div>
+          <div class="form-grid two">
+            <button class="btn" id="layer-clear-text">删除选中文字</button>
+            <button class="btn" id="layer-reset">重置位置</button>
+          </div>
+          <div class="form-grid one">
+            <button class="btn" id="layer-download">下载当前图</button>
+          </div>
+          <div class="form-grid one">
+            <button class="btn" id="layer-next-round">重新选择素材（下一轮编辑）</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="layer-result" class="layer-grid"></div>
+    </section>
+
+    <section id="pane-gallery" class="card pane">
+      <h2>素材库</h2>
+      <p class="hint">在工具条中完成上传、筛选、批量整理与删除。</p>
+
+      <div class="gallery-status" id="gallery-status">
+        <span>当前文件夹：<b id="gallery-status-folder">全部</b></span>
+        <span>可见素材：<b id="gallery-status-visible">0</b></span>
+        <span>已选素材：<b id="gallery-status-selected">0</b></span>
+        <span>总素材：<b id="gallery-status-total">0</b></span>
+      </div>
+
+      <div class="gallery-toolbar">
+        <div class="gallery-toolbar-row">
+          <label for="gallery-folder-filter">文件夹</label>
+          <select id="gallery-folder-filter">
+            <option value="">全部</option>
+          </select>
+          <label for="gallery-tag-filter">标签</label>
+          <select id="gallery-tag-filter">
+            <option value="">全部</option>
+          </select>
+          <input id="gallery-upload-files" type="file" accept="image/*" multiple />
+          <button class="btn primary" id="gallery-upload">上传</button>
+          <button class="btn" id="gallery-select-all">全选/取消</button>
+          <button class="btn" id="gallery-refresh">刷新</button>
+        </div>
+        <div class="gallery-toolbar-row">
+          <input id="gallery-new-folder" placeholder="新建文件夹" />
+          <button class="btn" id="gallery-create-folder">新建</button>
+          <select id="gallery-move-folder">
+            <option value="默认">移动到：默认</option>
+          </select>
+          <input id="gallery-tags-input" placeholder="标签：新品,主推,夏季" />
+          <select id="gallery-tags-mode">
+            <option value="add">追加标签</option>
+            <option value="replace">替换标签</option>
+          </select>
+          <button class="btn" id="gallery-apply-tags">应用标签</button>
+          <button class="btn warn" id="gallery-delete-selected">删除选中</button>
+        </div>
+      </div>
+      <div id="gallery-grid" class="grid"></div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

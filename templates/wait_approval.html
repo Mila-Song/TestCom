@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>等待授权 - AI电商视觉智能工作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <style>
+    .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+    .auth-card { width: min(520px, 100%); background: rgba(255,255,255,.95); border: 1px solid #dbe7f6; border-radius: 16px; padding: 22px; box-shadow: 0 20px 40px rgba(0,0,0,.12); }
+    .auth-title { margin: 0 0 10px; font-size: 24px; }
+    .hint { color: #5b6f86; font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+    .badge { display:inline-block; padding:2px 10px; border-radius: 999px; font-size:12px; margin-bottom: 10px; }
+    .badge.pending { background:#fff7cc; color:#854d0e; }
+    .badge.rejected { background:#ffe4e6; color:#9f1239; }
+    .actions { display:flex; gap:10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="auth-title">账号暂未授权</h1>
+      {% if status == 'rejected' %}
+      <div class="badge rejected">已驳回</div>
+      <div class="hint">你的账号（{{ username }}）当前为驳回状态，请联系管理员重新审核。</div>
+      {% else %}
+      <div class="badge pending">待审核</div>
+      <div class="hint">你的账号（{{ username }}）正在等待管理员授权。授权通过后即可使用全部功能。</div>
+      {% endif %}
+      <div class="actions">
+        <a class="btn" href="/account">账户设置</a>
+        <form method="post" action="/auth/logout">
+          <button class="btn" type="submit">退出登录</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>账号已到期 - AI电商视觉智能工作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <style>
+    .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+    .auth-card { width: min(520px, 100%); background: rgba(255,255,255,.95); border: 1px solid #dbe7f6; border-radius: 16px; padding: 22px; box-shadow: 0 20px 40px rgba(0,0,0,.12); }
+    .auth-title { margin: 0 0 10px; font-size: 24px; }
+    .hint { color: #5b6f86; font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+    .badge { display:inline-block; padding:2px 10px; border-radius: 999px; font-size:12px; margin-bottom: 10px; background:#ffe4e6; color:#9f1239; }
+    .actions { display:flex; gap:10px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h1 class="auth-title">账号使用期限已到期</h1>
+      <div class="badge">已到期</div>
+      <div class="hint">账号（{{ username }}）有效期截止到：{{ expires_at }}。请联系管理员续期后再使用。</div>
+      <div class="actions">
+        <a class="btn" href="/account">账户设置</a>
+        <form method="post" action="/auth/logout">
+          <button class="btn" type="submit">退出登录</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

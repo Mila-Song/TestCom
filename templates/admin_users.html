@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>用户管理 - AI电商视觉智能工作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <style>
+    .admin-wrap { max-width: 980px; margin: 28px auto; padding: 0 16px; }
+    .admin-head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 14px; }
+    .admin-card { background: #fff; border: 1px solid #dbe7f6; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    .admin-form { display: grid; grid-template-columns: 1.2fr 1.4fr 1.2fr auto; gap: 10px; align-items: center; }
+    .admin-form input, .admin-form select { width: 100%; height: 38px; border: 1px solid #dbe7f6; border-radius: 8px; padding: 0 10px; font-size: 14px; }
+    .admin-note { font-size: 13px; color: #5b6f86; margin-top: 8px; }
+    .admin-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #dbe7f6; border-radius: 12px; overflow: hidden; }
+    .admin-table th, .admin-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eef3fb; font-size: 14px; }
+    .admin-table th { background: #f6f9ff; color: #2a3d55; }
+    .badge { display:inline-block; padding:2px 8px; border-radius: 999px; font-size:12px; }
+    .badge.admin { background:#dbeafe; color:#1d4ed8; }
+    .badge.user { background:#eef2f7; color:#334155; }
+    .badge.disabled { background:#fee2e2; color:#b42318; }
+    .badge.approved { background:#dcfce7; color:#166534; }
+    .badge.pending { background:#fff7cc; color:#854d0e; }
+    .badge.rejected { background:#ffe4e6; color:#9f1239; }
+    .row-actions { display:flex; gap:8px; flex-wrap: wrap; }
+    .btn.small { height: 30px; padding: 0 10px; border-radius: 8px; font-size: 12px; }
+    .btn.small.danger { border-color: #f7c5c5; color: #b42318; background: #fff6f6; }
+    .admin-error { margin: 10px 0 0; color: #b42318; font-size: 13px; }
+    .admin-ok { margin: 10px 0 0; color: #1c6b3c; font-size: 13px; }
+    @media (max-width: 860px) {
+      .admin-form { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-wrap">
+    <div class="admin-head">
+      <h1 style="margin:0;">用户管理</h1>
+      <a class="btn" href="/">返回工作台</a>
+    </div>
+    <section class="admin-card">
+      <div class="admin-form">
+        <input id="new-username" placeholder="新用户名（字母数字._-）" />
+        <input id="new-email" type="email" placeholder="邮箱（用于找回密码）" />
+        <input id="new-password" type="password" placeholder="初始密码（至少6位）" />
+        <button class="btn primary" id="btn-create-user">创建用户</button>
+      </div>
+      <div class="admin-note">创建后用户默认为普通账号，授权状态为待审核。使用期限按“天数”设置。</div>
+      <div id="admin-msg"></div>
+    </section>
+    <table class="admin-table">
+      <thead>
+        <tr>
+          <th>用户名</th>
+          <th>邮箱</th>
+          <th>角色</th>
+          <th>授权</th>
+          <th>期限</th>
+          <th>状态</th>
+          <th>素材数</th>
+          <th>创建时间</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody id="users-tbody">
+        {% for u in users %}
+        <tr data-username="{{ u.username }}">
+          <td>{{ u.username }}</td>
+          <td>{{ u.email }}</td>
+          <td>
+            {% if u.role == 'admin' %}
+            <span class="badge admin">admin</span>
+            {% else %}
+            <span class="badge user">user</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if u.status == 'approved' %}
+            <span class="badge approved">已授权</span>
+            {% elif u.status == 'rejected' %}
+            <span class="badge rejected">已驳回</span>
+            {% else %}
+            <span class="badge pending">待审核</span>
+            {% endif %}
+          </td>
+          <td>{% if u.expires_at %}{{ u.expires_at }}{% else %}永久{% endif %}</td>
+          <td>
+            {% if u.disabled %}
+            <span class="badge disabled">禁用</span>
+            {% else %}
+            <span class="badge user">正常</span>
+            {% endif %}
+          </td>
+          <td>{{ u.assets_count }}</td>
+          <td>{{ u.created_at }}</td>
+          <td>
+            <div class="row-actions">
+              <button class="btn small js-approve">通过</button>
+              <button class="btn small js-reject">驳回</button>
+              <button class="btn small js-set-expiry">设置期限</button>
+              <button class="btn small js-toggle-status" data-disabled="{{ 1 if u.disabled else 0 }}">
+                {% if u.disabled %}启用{% else %}禁用{% endif %}
+              </button>
+              <button class="btn small js-reset-pwd">重置密码</button>
+              <button class="btn small danger js-delete-user">删除用户</button>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <script>
+    const $ = (s) => document.querySelector(s);
+    const tbody = $("#users-tbody");
+    const msg = $("#admin-msg");
+    const me = {{ (current_username or '')|tojson }};
+
+    function showMsg(text, ok = false) {
+      msg.className = ok ? "admin-ok" : "admin-error";
+      msg.textContent = text || "";
+    }
+
+    function esc(v) {
+      return String(v || "").replace(/[&<>"']/g, (m) => ({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" }[m]));
+    }
+
+    function roleBadge(role) {
+      return role === "admin"
+        ? '<span class="badge admin">admin</span>'
+        : '<span class="badge user">user</span>';
+    }
+
+    function statusBadge(disabled) {
+      return disabled
+        ? '<span class="badge disabled">禁用</span>'
+        : '<span class="badge user">正常</span>';
+    }
+
+    function authBadge(status) {
+      if (status === "approved") return '<span class="badge approved">已授权</span>';
+      if (status === "rejected") return '<span class="badge rejected">已驳回</span>';
+      return '<span class="badge pending">待审核</span>';
+    }
+
+    function renderRows(users) {
+      tbody.innerHTML = users.map((u) => `
+        <tr data-username="${esc(u.username)}">
+          <td>${esc(u.username)}</td>
+          <td>${esc(u.email || "")}</td>
+          <td>${roleBadge(u.role)}</td>
+          <td>${authBadge(String(u.status || "pending"))}</td>
+          <td>${esc(u.expires_at || "永久")}</td>
+          <td>${statusBadge(!!u.disabled)}</td>
+          <td>${Number(u.assets_count || 0)}</td>
+          <td>${esc(u.created_at)}</td>
+          <td>
+            <div class="row-actions">
+              <button class="btn small js-approve">通过</button>
+              <button class="btn small js-reject">驳回</button>
+              <button class="btn small js-set-expiry">设置期限</button>
+              <button class="btn small js-toggle-status" data-disabled="${u.disabled ? 1 : 0}">${u.disabled ? "启用" : "禁用"}</button>
+              <button class="btn small js-reset-pwd">重置密码</button>
+              <button class="btn small danger js-delete-user">删除用户</button>
+            </div>
+          </td>
+        </tr>
+      `).join("");
+    }
+
+    async function jpost(url, body) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body || {}),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error || `请求失败(${res.status})`);
+      return j;
+    }
+
+    $("#btn-create-user").addEventListener("click", async () => {
+      showMsg("");
+      const username = $("#new-username").value.trim();
+      const email = $("#new-email").value.trim();
+      const password = $("#new-password").value;
+      if (!username || !email || !password) {
+        showMsg("请填写用户名、邮箱和密码");
+        return;
+      }
+      try {
+        const j = await jpost("/api/admin/users/create", { username, email, password, role: "user" });
+        renderRows(j.users || []);
+        $("#new-username").value = "";
+        $("#new-email").value = "";
+        $("#new-password").value = "";
+        showMsg("用户创建成功", true);
+      } catch (e) {
+        showMsg(e.message || String(e));
+      }
+    });
+
+    tbody.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest("button");
+      if (!btn) return;
+      const tr = btn.closest("tr");
+      if (!tr) return;
+      const username = tr.dataset.username || "";
+      showMsg("");
+      try {
+        if (btn.classList.contains("js-approve")) {
+          const j = await jpost("/api/admin/users/approve", { username });
+          renderRows(j.users || []);
+          showMsg(`已通过 ${username} 的使用授权`, true);
+          return;
+        }
+        if (btn.classList.contains("js-reject")) {
+          if (!confirm(`确认驳回用户 ${username} 的使用授权？`)) return;
+          const j = await jpost("/api/admin/users/reject", { username });
+          renderRows(j.users || []);
+          showMsg(`已驳回 ${username} 的使用授权`, true);
+          return;
+        }
+        if (btn.classList.contains("js-set-expiry")) {
+          const v = prompt(`设置 ${username} 的使用期限天数（如 30）。留空表示永久有效。`, "");
+          if (v === null) return;
+          const days = String(v || "").trim();
+          const j = days
+            ? await jpost("/api/admin/users/set-expiry", { username, days })
+            : await jpost("/api/admin/users/set-expiry", { username, days: "" });
+          renderRows(j.users || []);
+          showMsg(days ? `已设置 ${username} 使用期限（${days}天）` : `已清除 ${username} 使用期限`, true);
+          return;
+        }
+        if (btn.classList.contains("js-toggle-status")) {
+          const disabled = (btn.dataset.disabled || "0") !== "1";
+          if (username === me && disabled) {
+            showMsg("不能禁用当前登录管理员");
+            return;
+          }
+          if (!confirm(disabled ? `确认禁用用户 ${username}？` : `确认启用用户 ${username}？`)) return;
+          const j = await jpost("/api/admin/users/set-status", { username, disabled });
+          renderRows(j.users || []);
+          showMsg(disabled ? `已禁用 ${username}` : `已启用 ${username}`, true);
+          return;
+        }
+        if (btn.classList.contains("js-reset-pwd")) {
+          const p = prompt(`请输入 ${username} 的新密码（至少6位）`);
+          if (!p) return;
+          await jpost("/api/admin/users/reset-password", { username, new_password: p });
+          showMsg(`已重置 ${username} 的密码`, true);
+          return;
+        }
+        if (btn.classList.contains("js-delete-user")) {
+          if (username === me) {
+            showMsg("不能删除当前登录管理员");
+            return;
+          }
+          if (!confirm(`确认删除用户 ${username}？该用户素材库会一并删除，且不可恢复。`)) return;
+          const j = await jpost("/api/admin/users/delete", { username });
+          renderRows(j.users || []);
+          showMsg(`已删除用户 ${username}`, true);
+          return;
+        }
+      } catch (e) {
+        showMsg(e.message || String(e));
+      }
+    });
+  </script>
+</body>
+</html>

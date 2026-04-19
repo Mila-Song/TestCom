@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>账户设置 - AI电商视觉智能工作台</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}" />
+  <style>
+    .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
+    .auth-card { width: min(460px, 100%); background: rgba(255,255,255,.95); border: 1px solid #dbe7f6; border-radius: 16px; padding: 22px; box-shadow: 0 20px 40px rgba(0,0,0,.12); }
+    .auth-title { margin: 0 0 12px; font-size: 24px; }
+    .auth-row { display: grid; gap: 10px; margin-bottom: 12px; }
+    .auth-foot { color: #5b6f86; font-size: 13px; }
+    .auth-foot a { color: #1d5bb2; text-decoration: none; }
+    .auth-error { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #f6c6c6; background: #fff1f1; color: #b42318; border-radius: 10px; font-size: 13px; }
+    .auth-info { margin: 0 0 12px; padding: 10px 12px; border: 1px solid #b6ddc2; background: #edf9f1; color: #1c6b3c; border-radius: 10px; font-size: 13px; }
+    .readonly { background: #f7fafc; color: #425466; }
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <form class="auth-card" method="post" action="/auth/change-password">
+      <h1 class="auth-title">账户设置</h1>
+      {% if info %}
+      <div class="auth-info">{{ info }}</div>
+      {% endif %}
+      {% if error %}
+      <div class="auth-error">{{ error }}</div>
+      {% endif %}
+      <div class="auth-row">
+        <input class="readonly" value="用户名：{{ username }}" readonly />
+        <input class="readonly" value="邮箱：{{ email }}" readonly />
+      </div>
+      <div class="auth-row">
+        <input name="old_password" type="password" placeholder="当前密码" required />
+        <input name="new_password" type="password" placeholder="新密码（至少6位）" required />
+      </div>
+      <div class="auth-row">
+        <button class="btn primary" type="submit">修改密码</button>
+      </div>
+      <div class="auth-foot">
+        <a href="/">返回工作台</a>
+      </div>
+    </form>
+  </div>
+</body>
+</html>
