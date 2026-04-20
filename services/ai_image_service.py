@@ -2,15 +2,58 @@ from __future__ import annotations
 
 import base64
 import io
+import logging
 import os
 import random
 import time
 from typing import Any, Dict, List, Tuple
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 import numpy as np
 import requests
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+logger = logging.getLogger(__name__)
+_QWEN_RUNTIME_LOGGED = False
+_QWEN_DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com"
+
+
+def _resolve_qwen_base_url() -> str:
+    base = (os.getenv("QWEN_BASE_URL", "").strip() or _QWEN_DEFAULT_BASE_URL).rstrip("/")
+    return base
+
+
+def _resolve_qwen_runtime_config() -> Dict[str, str]:
+    base = _resolve_qwen_base_url()
+    image_api_url = os.getenv("QWEN_IMAGE_API_URL", "").strip() or f"{base}/compatible-mode/v1/images/generations"
+    mm_base_api_url = os.getenv("QWEN_MM_BASE_API_URL", "").strip() or f"{base}/api/v1"
+    image_model = os.getenv("QWEN_IMAGE_MODEL", "qwen-image-2.0-2026-03-03").strip()
+    edit_model = os.getenv("QWEN_IMAGE_EDIT_MODEL", "qwen-image-2.0-pro").strip()
+    native_t2i_url = f"{base}/api/v1/services/aigc/text2image/image-synthesis"
+    return {
+        "base_url": base,
+        "image_api_url": image_api_url,
+        "mm_base_api_url": mm_base_api_url,
+        "native_t2i_url": native_t2i_url,
+        "image_model": image_model,
+        "edit_model": edit_model,
+    }
+
+
+def _log_qwen_runtime_once() -> None:
+    global _QWEN_RUNTIME_LOGGED
+    if _QWEN_RUNTIME_LOGGED:
+        return
+    cfg = _resolve_qwen_runtime_config()
+    logger.info(
+        "Qwen runtime config: base_url=%s image_api_url=%s mm_base_api_url=%s image_model=%s edit_model=%s",
+        cfg["base_url"],
+        cfg["image_api_url"],
+        cfg["mm_base_api_url"],
+        cfg["image_model"],
+        cfg["edit_model"],
+    )
+    _QWEN_RUNTIME_LOGGED = True
 
 
 def _post_json_with_rate_retry(
@@ -94,11 +137,13 @@ def generate_image_via_pollinations(prompt: str, w: int, h: int, seed: int | Non
 
 
 def generate_image_via_qwen(prompt: str, w: int, h: int) -> Image.Image:
+    _log_qwen_runtime_once()
     api_key = os.getenv("QWEN_API_KEY", "").strip()
     if not api_key:
         raise ValueError("缺少 QWEN_API_KEY")
-    api_url = os.getenv("QWEN_IMAGE_API_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/images/generations").strip()
-    model = os.getenv("QWEN_IMAGE_MODEL", "qwen-image-2.0-2026-03-03").strip()
+    cfg = _resolve_qwen_runtime_config()
+    api_url = cfg["image_api_url"]
+    model = cfg["image_model"]
     size_compat = f"{w}x{h}"
     size_native = f"{w}*{h}"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -148,11 +193,7 @@ def generate_image_via_qwen(prompt: str, w: int, h: int) -> Image.Image:
     def is_native_text2img_url(url: str) -> bool:
         return "/api/v1/services/aigc/text2image/image-synthesis" in url
 
-    host = (urlparse(api_url).hostname or "").lower()
-    if "dashscope-intl.aliyuncs.com" in host:
-        native_url = "https://dashscope-intl.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
-    else:
-        native_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis"
+    native_url = cfg["native_t2i_url"]
 
     first_payload = (
         {"model": model, "input": {"prompt": prompt}, "parameters": {"size": size_native}}
@@ -230,11 +271,8 @@ def generate_image_via_qwen(prompt: str, w: int, h: int) -> Image.Image:
 
 
 def _qwen_base_api_url() -> str:
-    base_from_compat = os.getenv("QWEN_IMAGE_API_URL", "").strip()
-    host = (urlparse(base_from_compat).hostname or "").lower()
-    if "dashscope-intl.aliyuncs.com" in host:
-        return "https://dashscope-intl.aliyuncs.com/api/v1"
-    return "https://dashscope.aliyuncs.com/api/v1"
+    cfg = _resolve_qwen_runtime_config()
+    return cfg["mm_base_api_url"]
 
 
 def _image_to_data_uri(img: Image.Image, max_side: int = 1536) -> str:
@@ -379,11 +417,13 @@ def generate_stylized_product_composition_via_qwen(product_img: Image.Image, ref
 
 
 def generate_image_edit_via_qwen(product_img: Image.Image, reference_img: Image.Image, strength: float = 0.75) -> Image.Image:
+    _log_qwen_runtime_once()
     api_key = os.getenv("QWEN_API_KEY", "").strip()
     if not api_key:
         raise ValueError("缺少 QWEN_API_KEY")
 
-    model = os.getenv("QWEN_IMAGE_EDIT_MODEL", "qwen-image-2.0-pro").strip()
+    cfg = _resolve_qwen_runtime_config()
+    model = cfg["edit_model"]
     base_api = os.getenv("QWEN_MM_BASE_API_URL", "").strip() or _qwen_base_api_url()
     call_url = f"{base_api.rstrip('/')}/services/aigc/multimodal-generation/generation"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -498,13 +538,15 @@ def generate_image_optimize_by_prompt_via_qwen(
     strength: float = 0.65,
     variation_directive: str = "",
 ) -> Image.Image:
+    _log_qwen_runtime_once()
     api_key = os.getenv("QWEN_API_KEY", "").strip()
     if not api_key:
         raise ValueError("缺少 QWEN_API_KEY")
     if not user_prompt.strip():
         raise ValueError("prompt 不能为空")
 
-    model = os.getenv("QWEN_IMAGE_EDIT_MODEL", "qwen-image-2.0-pro").strip()
+    cfg = _resolve_qwen_runtime_config()
+    model = cfg["edit_model"]
     base_api = os.getenv("QWEN_MM_BASE_API_URL", "").strip() or _qwen_base_api_url()
     call_url = f"{base_api.rstrip('/')}/services/aigc/multimodal-generation/generation"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
