@@ -159,27 +159,24 @@
     <section id="pane-wm" class="card pane">
       <h2>AI去水印</h2>
       <p class="hint">先选择素材，再执行批量去水印。系统会依次处理，结果自动进入素材库。</p>
-      <div class="guide-strip">
-        <span class="guide-pill">步骤 1：选择素材（支持多选）</span>
-        <span class="guide-pill">步骤 2：执行去水印</span>
-      </div>
 
       <div class="feature-columns bg-columns">
         <div class="feature-block">
-          <h3>步骤 1：选择要处理的图片</h3>
+          <h3>选择要处理的图片</h3>
           <div class="form-grid two compact-two">
             <label><input type="radio" name="wm-source" value="library" checked /> 从素材库选取</label>
             <label><input type="radio" name="wm-source" value="local" /> 从本地上传</label>
           </div>
           <div id="wm-source-library">
-          <div class="form-grid two">
-            <button class="btn primary" id="wm-pick-assets">从素材库选择（多选）</button>
-            <button class="btn" id="wm-clear-assets">清空已选</button>
-          </div>
+            <div class="form-grid two">
+              <button class="btn primary" id="wm-pick-assets">从素材库选择（多选）</button>
+              <button class="btn" id="wm-clear-assets">清空已选</button>
+            </div>
           </div>
           <div id="wm-source-local" style="display:none;">
             <input id="wm-local-files" type="file" accept="image/png,image/jpeg,image/webp" multiple />
             <div id="wm-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
+            <div id="wm-local-preview" class="grid" style="margin-top:10px;"></div>
           </div>
           <div class="hint-inline">已选择 <b id="wm-selected-count">0 张</b> 图片</div>
           <input id="wm-asset-ids" type="hidden" />
@@ -188,7 +185,7 @@
         </div>
 
         <div class="feature-block">
-          <h3>步骤 2：执行去水印</h3>
+          <h3>执行去水印</h3>
           <div class="form-grid one">
             <button class="btn primary" id="wm-run">批量去水印</button>
           </div>
@@ -209,27 +206,24 @@
     <section id="pane-bg" class="card pane">
       <h2>AI换背景</h2>
       <p class="hint">先选择素材，再填写背景描述后执行执行一键换背景。系统会依次处理，结果自动进入素材库。</p>
-      <div class="guide-strip">
-        <span class="guide-pill">步骤 1：选择素材（支持多选）</span>
-        <span class="guide-pill">步骤 2：执行换背景</span>
-      </div>
 
       <div class="feature-columns bg-columns">
         <div class="feature-block">
-          <h3>步骤 1：选择要处理的图片</h3>
+          <h3>选择要处理的图片</h3>
           <div class="form-grid two compact-two">
             <label><input type="radio" name="bg-source" value="library" checked /> 从素材库选取</label>
             <label><input type="radio" name="bg-source" value="local" /> 从本地上传</label>
           </div>
           <div id="bg-source-library">
-          <div class="form-grid two">
-            <button class="btn primary" id="bg-pick-assets">从素材库选择（多选）</button>
-            <button class="btn" id="bg-clear-assets">清空已选</button>
-          </div>
+            <div class="form-grid two">
+              <button class="btn primary" id="bg-pick-assets">从素材库选择（多选）</button>
+              <button class="btn" id="bg-clear-assets">清空已选</button>
+            </div>
           </div>
           <div id="bg-source-local" style="display:none;">
             <input id="bg-local-files" type="file" accept="image/png,image/jpeg,image/webp" multiple />
             <div id="bg-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
+            <div id="bg-local-preview" class="grid" style="margin-top:10px;"></div>
           </div>
           <div class="hint-inline">已选择 <b id="bg-selected-count">0 张</b> 图片</div>
           <input id="bg-asset-ids" type="hidden" />
@@ -238,7 +232,7 @@
         </div>
 
         <div class="feature-block">
-          <h3>步骤 2：执行换背景</h3>
+          <h3>执行换背景</h3>
           <div class="form-grid one">
             <textarea id="bg-prompt" rows="4" placeholder="背景描述，如：浅灰渐变摄影棚背景，柔和阴影，产品居中"></textarea>
           </div>
@@ -314,9 +308,6 @@
           </div>
           <div class="form-grid one">
             <input id="txt-content" placeholder="叠加文案，如：限时直降 30%" />
-          </div>
-          <div class="form-grid one">
-            <button class="btn" id="layer-insert-text">插入文字</button>
           </div>
           <div class="form-grid one">
             <select id="text-layer-list" size="5"></select>

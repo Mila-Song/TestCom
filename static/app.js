@@ -348,13 +348,11 @@ function setupTabs() {
   });
 }
 
-async function buildPromptForPrefix(prefix, options = {}) {
+async function buildPromptForPrefix(prefix) {
   const isOptimize = prefix === "p";
   const size = getSizeByPrefix(isOptimize ? "gen" : "g");
-  const tipEl = qs(isOptimize ? "#p-mode-tip" : "#g-mode-tip");
   const seq = (state.promptBuildSeq[prefix] || 0) + 1;
   state.promptBuildSeq[prefix] = seq;
-  if (tipEl) tipEl.textContent = "正在后台生成提示词...";
 
   try {
     const d = await api("/api/prompt/build", {
@@ -370,16 +368,9 @@ async function buildPromptForPrefix(prefix, options = {}) {
     });
     if (state.promptBuildSeq[prefix] !== seq) return;
     state.generatedPrompts[prefix] = d.prompt || "";
-    if (!tipEl) return;
-    if (d.warning) {
-      tipEl.textContent = `已自动回退默认提示词：${d.warning}`;
-    } else {
-      tipEl.textContent = "提示词已在后台自动生成";
-    }
   } catch (e) {
     if (state.promptBuildSeq[prefix] !== seq) return;
     state.generatedPrompts[prefix] = "";
-    if (tipEl) tipEl.textContent = "后台自动生成提示词失败";
     alert(e.message);
   }
 }
@@ -747,11 +738,24 @@ function setupBatchBg() {
     const localBox = qs(`#${prefix}-source-local`);
     const localInput = qs(`#${prefix}-local-files`);
     const localName = qs(`#${prefix}-local-name`);
+    const localPreview = qs(`#${prefix}-local-preview`);
+    const pickerPanel = qs(`#${prefix}-picker-panel`);
+
+    const renderLocalPreview = (assetIds) => {
+      if (!localPreview) return;
+      const ids = Array.isArray(assetIds) ? assetIds : [];
+      const items = ids
+        .map((id) => state.assets.find((x) => x.asset_id === id))
+        .filter(Boolean);
+      localPreview.innerHTML = items.length ? items.map(card).join("") : "";
+    };
 
     const syncUI = () => {
       const source = qsa(`input[name='${prefix}-source']`).find((el) => el.checked)?.value || "library";
       if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
       if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+      if (pickerPanel) pickerPanel.style.display = source === "library" ? "grid" : "none";
+      if (localPreview) localPreview.style.display = source === "local" ? "grid" : "none";
     };
 
     sourceInputs.forEach((el) => {
@@ -771,13 +775,16 @@ function setupBatchBg() {
           state[stateKey] = items.map((x) => x.asset_id).filter(Boolean);
           await refreshAssets();
           picker.setSelected(state[stateKey]);
+          renderLocalPreview(state[stateKey]);
           if (localName) localName.textContent = `已存入素材库: ${items.length} 张`;
         } catch (e) {
           if (localName) localName.textContent = "本地图片入库失败";
+          renderLocalPreview([]);
           alert(e.message);
         }
       };
     }
+    renderLocalPreview(state[stateKey]);
     syncUI();
   }
 
@@ -995,6 +1002,30 @@ function syncToolbarFromSelectedTextStamp(ed) {
   ed.textY = Number(s.y || ed.textY);
   ed.textBoxW = Math.max(80, Number(s.boxW || ed.textBoxW || 260));
   ed.textBoxH = Math.max(30, Number(s.boxH || ed.textBoxH || 44));
+}
+
+function appendTextStampFromToolbar(ed, content) {
+  if (!ed) return -1;
+  const txt = String(content || "").trim();
+  if (!txt) return -1;
+  ed.textStamps = ed.textStamps || [];
+  ed.textStamps.push({
+    content: txt,
+    size: Number(qs("#txt-size")?.value || 36),
+    noWrap: !!qs("#txt-nowrap")?.checked,
+    font: String(qs("#txt-font")?.value || "noto"),
+    color: String(qs("#txt-color")?.value || "#22344a"),
+    x: Number(ed.textX || ed.canvas.width / 2),
+    y: Number(ed.textY || Math.round(ed.canvas.height * 0.08)),
+    boxW: Number(ed.textBoxW || Math.max(180, Math.round(ed.canvas.width * 0.3))),
+    boxH: Number(ed.textBoxH || 44),
+  });
+  ed.activeTextStamp = ed.textStamps.length - 1;
+  ed.activeTarget = "text";
+  syncToolbarFromSelectedTextStamp(ed);
+  refreshTextLayerList(ed);
+  setCanvasTextInputVisible(true, true);
+  return ed.activeTextStamp;
 }
 
 function refreshTextLayerList(ed = null) {
@@ -2136,9 +2167,13 @@ function bindLayerEditorControls() {
   qs("#txt-content").addEventListener("input", () => {
     const ed = state.layerEditor;
     if (!ed) return;
+    const value = qs("#txt-content").value || "";
     const idx = Number(ed.activeTextStamp ?? -1);
     if (idx >= 0 && idx < (ed.textStamps || []).length) {
-      ed.textStamps[idx].content = qs("#txt-content").value || "";
+      ed.textStamps[idx].content = value;
+    } else if (value.trim()) {
+      appendTextStampFromToolbar(ed, value);
+      layerPushHistory();
     }
     layerRender();
   });
@@ -2218,39 +2253,6 @@ function bindLayerEditorControls() {
     } else {
       qs("#txt-content").value = "";
     }
-    layerRender();
-    layerPushHistory();
-  };
-  qs("#layer-insert-text").onclick = () => {
-    if (!state.layerEditor) return alert("请先选择素材");
-    const ed = state.layerEditor;
-    const txtEl = qs("#txt-content");
-    const txt = (txtEl?.value || "").trim();
-    if (txt) {
-      ed.textStamps = ed.textStamps || [];
-      ed.textStamps.push({
-        content: txt,
-        size: Number(qs("#txt-size")?.value || 36),
-        noWrap: !!qs("#txt-nowrap")?.checked,
-        font: String(qs("#txt-font")?.value || "noto"),
-        color: String(qs("#txt-color")?.value || "#22344a"),
-        x: Number(ed.textX || ed.canvas.width / 2),
-        y: Number(ed.textY || Math.round(ed.canvas.height * 0.08)),
-        boxW: Number(ed.textBoxW || Math.max(180, Math.round(ed.canvas.width * 0.3))),
-        boxH: Number(ed.textBoxH || 44),
-      });
-      ed.activeTextStamp = -1;
-      txtEl.value = "";
-      ed.textX = Math.min(ed.canvas.width - 20, Number(ed.textX || 0) + 22);
-      ed.textY = Math.min(ed.canvas.height - 20, Number(ed.textY || 0) + 22);
-      ed.activeTarget = "text";
-      setCanvasTextInputVisible(true, true);
-      layerPushHistory();
-      layerRender();
-      return;
-    }
-    ed.activeTarget = "text";
-    setCanvasTextInputVisible(true, true);
     layerRender();
     layerPushHistory();
   };
@@ -2525,11 +2527,36 @@ function setupLayer() {
   const localBox = qs("#layer-source-local");
   const localInput = qs("#layer-local-file");
   const localName = qs("#layer-local-name");
+  const canvasWrap = qs(".layer-canvas-wrap");
 
   const syncLayerSourceUI = () => {
     const source = qsa("input[name='layer-source']").find((el) => el.checked)?.value || "library";
     if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
     if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+  };
+
+  const loadLayerLocalFile = async (file) => {
+    state.layerLocalAssetId = "";
+    if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
+    if (!file) return;
+    try {
+      const items = await uploadFilesToLibrary([file]);
+      const item = items[0];
+      state.layerLocalAssetId = item?.asset_id || "";
+      await refreshAssets();
+      const sourceLocal = qsa("input[name='layer-source']").find((el) => el.value === "local");
+      if (sourceLocal) sourceLocal.checked = true;
+      syncLayerSourceUI();
+      if (state.layerLocalAssetId && qs("#layer-asset")) {
+        qs("#layer-asset").value = state.layerLocalAssetId;
+      }
+      renderLayerSelectedAsset();
+      await previewSelectedAssetOnLayerCanvas();
+      if (localName) localName.textContent = state.layerLocalAssetId ? `已存入素材库: ${file.name}` : `已选择: ${file.name}`;
+    } catch (e) {
+      if (localName) localName.textContent = `入库失败: ${file.name}`;
+      alert(e.message);
+    }
   };
 
   sourceInputs.forEach((el) => {
@@ -2538,25 +2565,35 @@ function setupLayer() {
   if (localInput) {
     localInput.onchange = async (ev) => {
       const file = ev.target?.files?.[0] || null;
-      state.layerLocalAssetId = "";
-      if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
-      if (!file) return;
-      try {
-        const items = await uploadFilesToLibrary([file]);
-        const item = items[0];
-        state.layerLocalAssetId = item?.asset_id || "";
-        await refreshAssets();
-        if (state.layerLocalAssetId && qs("#layer-asset")) {
-          qs("#layer-asset").value = state.layerLocalAssetId;
-        }
-        renderLayerSelectedAsset();
-        await previewSelectedAssetOnLayerCanvas();
-        if (localName) localName.textContent = state.layerLocalAssetId ? `已存入素材库: ${file.name}` : `已选择: ${file.name}`;
-      } catch (e) {
-        if (localName) localName.textContent = `入库失败: ${file.name}`;
-        alert(e.message);
-      }
+      await loadLayerLocalFile(file);
     };
+  }
+  if (canvasWrap) {
+    const setDragState = (active) => {
+      canvasWrap.classList.toggle("dragover", !!active);
+    };
+    ["dragenter", "dragover"].forEach((eventName) => {
+      canvasWrap.addEventListener(eventName, (ev) => {
+        ev.preventDefault();
+        setDragState(true);
+      });
+    });
+    ["dragleave", "dragend"].forEach((eventName) => {
+      canvasWrap.addEventListener(eventName, () => {
+        setDragState(false);
+      });
+    });
+    canvasWrap.addEventListener("drop", async (ev) => {
+      ev.preventDefault();
+      setDragState(false);
+      const files = Array.from(ev.dataTransfer?.files || []);
+      const file = files.find((x) => String(x.type || "").startsWith("image/")) || null;
+      if (!file) {
+        alert("请拖入图片文件");
+        return;
+      }
+      await loadLayerLocalFile(file);
+    });
   }
   syncLayerSourceUI();
 
