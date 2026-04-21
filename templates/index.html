@@ -114,22 +114,6 @@
       <p class="hint">根据输入自动在后台生成提示词，并直接用于生成图片。</p>
 
       <div class="feature-block builder-block">
-        <p class="hint">先选择参考图片，再填写生成需求。</p>
-        <div class="form-grid two compact-two">
-          <label><input type="radio" name="g-source" value="library" checked /> 从素材库选取</label>
-          <label><input type="radio" name="g-source" value="local" /> 从本地选取</label>
-        </div>
-        <div class="form-grid one">
-          <div id="g-source-library">
-            <select id="g-reference-asset">
-              <option value="">选择参考图片</option>
-            </select>
-          </div>
-          <div id="g-source-local" style="display:none;">
-            <input id="g-local-file" type="file" accept="image/png,image/jpeg,image/webp" />
-            <div id="g-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
-          </div>
-        </div>
         <div class="form-grid four">
           <input id="g-product-name" placeholder="产品名称，如：轻盐苏打饼干" />
           <select id="g-size">

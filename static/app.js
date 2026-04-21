@@ -8,8 +8,6 @@ const state = {
   galleryTagFilter: "",
   optimizeLocalFile: null,
   optimizeLocalAssetId: "",
-  generateLocalFile: null,
-  generateLocalAssetId: "",
   wmLocalAssetIds: [],
   bgLocalAssetIds: [],
   layerLocalAssetId: "",
@@ -204,18 +202,6 @@ function refreshAssetSelectors() {
       }))
       .join("");
     if (prev && sorted.some(x => x.asset_id === prev)) genOptSel.value = prev;
-  }
-  const genRefSel = qs("#g-reference-asset");
-  if (genRefSel) {
-    const prev = genRefSel.value;
-    genRefSel.innerHTML = ["<option value=''>选择参考图片</option>"]
-      .concat(sorted.map(x => {
-        const name = getAssetName(x);
-        const folder = x.folder || "默认";
-        return `<option value="${x.asset_id}">[${folder}] ${name}</option>`;
-      }))
-      .join("");
-    if (prev && sorted.some(x => x.asset_id === prev)) genRefSel.value = prev;
   }
   const overlaySel = qs("#layer-overlay-asset");
   if (overlaySel) {
@@ -579,56 +565,6 @@ function setupOptimize() {
 }
 
 function setupImageGenerate() {
-  const sourceInputs = qsa("input[name='g-source']");
-  const libraryBox = qs("#g-source-library");
-  const localBox = qs("#g-source-local");
-  const localFileInput = qs("#g-local-file");
-  const localName = qs("#g-local-name");
-
-  const syncGenerateSourceUI = () => {
-    const source = qsa("input[name='g-source']").find((el) => el.checked)?.value || "library";
-    if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
-    if (localBox) localBox.style.display = source === "local" ? "block" : "none";
-  };
-
-  sourceInputs.forEach((el) => {
-    el.onchange = syncGenerateSourceUI;
-  });
-  if (localFileInput) {
-    localFileInput.onchange = async (ev) => {
-      const file = ev.target?.files?.[0] || null;
-      state.generateLocalFile = file;
-      state.generateLocalAssetId = "";
-      if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
-      if (!file) return;
-      try {
-        const image_base64 = await fileToDataUrl(file);
-        const d = await api("/api/assets/upload-base64", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            image_base64,
-            original_name: file.name || "local-image.png",
-          }),
-        });
-        state.generateLocalAssetId = d?.item?.asset_id || "";
-        await refreshAssets();
-        if (state.generateLocalAssetId && qs("#g-reference-asset")) {
-          qs("#g-reference-asset").value = state.generateLocalAssetId;
-        }
-        if (localName) {
-          localName.textContent = state.generateLocalAssetId
-            ? `已存入素材库: ${file.name}`
-            : `已选择: ${file.name}`;
-        }
-      } catch (e) {
-        if (localName) localName.textContent = `入库失败: ${file.name}`;
-        alert(e.message);
-      }
-    };
-  }
-  syncGenerateSourceUI();
-
   qs("#g-run").onclick = async () => {
     if (state.busy.gen) return;
     state.busy.gen = true;
@@ -636,10 +572,6 @@ function setupImageGenerate() {
     const pg = startProgress("gen", "正在生成图片，请稍候...");
     try {
       let prompt = String(state.generatedPrompts.g || "").trim();
-      const source = qsa("input[name='g-source']").find((el) => el.checked)?.value || "library";
-      const reference_asset_id = source === "library"
-        ? (qs("#g-reference-asset")?.value || "").trim()
-        : String(state.generateLocalAssetId || "").trim();
       let html = "";
       if (prompt) {
         const { width: w, height: h } = getSizeByPrefix("g");
@@ -651,7 +583,6 @@ function setupImageGenerate() {
             provider: "qwen",
             width: w,
             height: h,
-            reference_asset_id,
           }),
         });
         html = card(d.item);
@@ -668,7 +599,6 @@ function setupImageGenerate() {
             provider: "qwen",
             width: w,
             height: h,
-            reference_asset_id,
           }),
         });
         html = card(d.item);
