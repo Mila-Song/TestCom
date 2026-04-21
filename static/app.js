@@ -6,10 +6,20 @@ const state = {
   folders: ["默认"],
   galleryFolderFilter: "",
   galleryTagFilter: "",
+  optimizeLocalFile: null,
+  optimizeLocalAssetId: "",
+  generateLocalFile: null,
+  generateLocalAssetId: "",
+  wmLocalAssetIds: [],
+  bgLocalAssetIds: [],
+  layerLocalAssetId: "",
   layerEditor: null,
   layerEditorBound: false,
   gallerySelected: new Set(),
   busy: { opt: false, gen: false, wm: false, bg: false },
+  promptBuildSeq: { p: 0, g: 0 },
+  promptBuildTimers: { p: null, g: null },
+  generatedPrompts: { p: "", g: "" },
 };
 
 async function api(url, opts = {}) {
@@ -195,6 +205,18 @@ function refreshAssetSelectors() {
       .join("");
     if (prev && sorted.some(x => x.asset_id === prev)) genOptSel.value = prev;
   }
+  const genRefSel = qs("#g-reference-asset");
+  if (genRefSel) {
+    const prev = genRefSel.value;
+    genRefSel.innerHTML = ["<option value=''>选择参考图片</option>"]
+      .concat(sorted.map(x => {
+        const name = getAssetName(x);
+        const folder = x.folder || "默认";
+        return `<option value="${x.asset_id}">[${folder}] ${name}</option>`;
+      }))
+      .join("");
+    if (prev && sorted.some(x => x.asset_id === prev)) genRefSel.value = prev;
+  }
   const overlaySel = qs("#layer-overlay-asset");
   if (overlaySel) {
     const prev = overlaySel.value;
@@ -340,35 +362,66 @@ function setupTabs() {
   });
 }
 
-function setupOptimizePromptBuild() {
-  qs("#p-build").onclick = async () => {
-    try {
-      const size = getSizeByPrefix("gen");
-      const d = await api("/api/prompt/build", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product_name: qs("#p-product-name").value,
-          primary_selling: qs("#p-selling-primary").value,
-          secondary_selling: qs("#p-selling-secondary").value,
-          other_selling: qs("#p-selling-other").value,
-          mode: qs("#p-mode").value,
-          resolution: size.resolution,
-          display_text: qs("#image-overlay-text").value || "",
-        }),
-      });
-      qs("#gen-prompt").value = d.prompt;
-      if (d.warning) {
-        qs("#p-mode-tip").textContent = `已回退到模板模式：${d.warning}`;
-      } else if (d.mode === "hybrid") {
-        qs("#p-mode-tip").textContent = `混合模式已生成（模型：${d.llm_model || "N/A"}）`;
-      } else {
-        qs("#p-mode-tip").textContent = "模板模式已生成，可手动修改后再调用图片API。";
-      }
-    } catch (e) {
-      alert(e.message);
+async function buildPromptForPrefix(prefix, options = {}) {
+  const isOptimize = prefix === "p";
+  const size = getSizeByPrefix(isOptimize ? "gen" : "g");
+  const tipEl = qs(isOptimize ? "#p-mode-tip" : "#g-mode-tip");
+  const seq = (state.promptBuildSeq[prefix] || 0) + 1;
+  state.promptBuildSeq[prefix] = seq;
+  if (tipEl) tipEl.textContent = "正在后台生成提示词...";
+
+  try {
+    const d = await api("/api/prompt/build", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product_name: qs(isOptimize ? "#p-product-name" : "#g-product-name").value,
+        primary_selling: qs(isOptimize ? "#p-selling-primary" : "#g-selling-primary").value,
+        secondary_selling: qs(isOptimize ? "#p-selling-secondary" : "#g-selling-secondary").value,
+        other_selling: qs(isOptimize ? "#p-selling-other" : "#g-selling-other").value,
+        resolution: size.resolution,
+      }),
+    });
+    if (state.promptBuildSeq[prefix] !== seq) return;
+    state.generatedPrompts[prefix] = d.prompt || "";
+    if (!tipEl) return;
+    if (d.warning) {
+      tipEl.textContent = `已自动回退默认提示词：${d.warning}`;
+    } else {
+      tipEl.textContent = "提示词已在后台自动生成";
     }
-  };
+  } catch (e) {
+    if (state.promptBuildSeq[prefix] !== seq) return;
+    state.generatedPrompts[prefix] = "";
+    if (tipEl) tipEl.textContent = "后台自动生成提示词失败";
+    alert(e.message);
+  }
+}
+
+function schedulePromptBuild(prefix, delay = 500) {
+  const timer = state.promptBuildTimers[prefix];
+  if (timer) window.clearTimeout(timer);
+  state.promptBuildTimers[prefix] = window.setTimeout(() => {
+    buildPromptForPrefix(prefix);
+  }, delay);
+}
+
+function setupOptimizePromptBuild() {
+  [
+    "#p-product-name",
+    "#p-selling-primary",
+    "#p-selling-secondary",
+    "#p-selling-other",
+    "#gen-size",
+    "#gen-custom-width",
+    "#gen-custom-height",
+  ].forEach((selector) => {
+    const el = qs(selector);
+    if (!el) return;
+    const eventName = selector === "#gen-size" ? "change" : "input";
+    el.addEventListener(eventName, () => schedulePromptBuild("p"));
+  });
+  schedulePromptBuild("p", 0);
 }
 
 function getSizeByPrefix(prefix) {
@@ -399,37 +452,71 @@ function setupSizePickerByPrefix(prefix) {
 }
 
 function setupGeneratePromptBuild() {
-  qs("#g-build").onclick = async () => {
-    try {
-      const size = getSizeByPrefix("g");
-      const d = await api("/api/prompt/build", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product_name: qs("#g-product-name").value,
-          primary_selling: qs("#g-selling-primary").value,
-          secondary_selling: qs("#g-selling-secondary").value,
-          other_selling: qs("#g-selling-other").value,
-          mode: qs("#g-mode").value,
-          resolution: size.resolution,
-          display_text: qs("#g-image-overlay-text").value || "",
-        }),
-      });
-      qs("#g-prompt").value = d.prompt;
-      if (d.warning) {
-        qs("#g-mode-tip").textContent = `已回退到模板模式：${d.warning}`;
-      } else if (d.mode === "hybrid") {
-        qs("#g-mode-tip").textContent = `混合模式已生成（模型：${d.llm_model || "N/A"}）`;
-      } else {
-        qs("#g-mode-tip").textContent = "模板模式已生成，可手动修改后再调用图片API。";
-      }
-    } catch (e) {
-      alert(e.message);
-    }
-  };
+  [
+    "#g-product-name",
+    "#g-selling-primary",
+    "#g-selling-secondary",
+    "#g-selling-other",
+    "#g-size",
+    "#g-custom-width",
+    "#g-custom-height",
+  ].forEach((selector) => {
+    const el = qs(selector);
+    if (!el) return;
+    const eventName = selector === "#g-size" ? "change" : "input";
+    el.addEventListener(eventName, () => schedulePromptBuild("g"));
+  });
+  schedulePromptBuild("g", 0);
 }
 
 function setupOptimize() {
+  const sourceInputs = qsa("input[name='gen-opt-source']");
+  const libraryBox = qs("#gen-opt-source-library");
+  const localBox = qs("#gen-opt-source-local");
+  const localFileInput = qs("#gen-opt-file");
+  const localName = qs("#gen-opt-local-name");
+
+  const syncOptimizeSourceUI = () => {
+    const source = qsa("input[name='gen-opt-source']").find((el) => el.checked)?.value || "library";
+    if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
+    if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+  };
+
+  sourceInputs.forEach((el) => {
+    el.onchange = syncOptimizeSourceUI;
+  });
+  if (localFileInput) {
+    localFileInput.onchange = async (ev) => {
+      const file = ev.target?.files?.[0] || null;
+      state.optimizeLocalFile = file;
+      state.optimizeLocalAssetId = "";
+      if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
+      if (!file) return;
+      try {
+        const image_base64 = await fileToDataUrl(file);
+        const d = await api("/api/assets/upload-base64", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_base64,
+            original_name: file.name || "local-image.png",
+          }),
+        });
+        state.optimizeLocalAssetId = d?.item?.asset_id || "";
+        await refreshAssets();
+        if (localName) {
+          localName.textContent = state.optimizeLocalAssetId
+            ? `已存入素材库: ${file.name}`
+            : `已选择: ${file.name}`;
+        }
+      } catch (e) {
+        if (localName) localName.textContent = `入库失败: ${file.name}`;
+        alert(e.message);
+      }
+    };
+  }
+  syncOptimizeSourceUI();
+
   const optBtn = qs("#gen-opt-run");
   if (optBtn) {
     optBtn.onclick = async () => {
@@ -438,25 +525,42 @@ function setupOptimize() {
       setDisabled(["#gen-opt-run"], true);
       const pg = startProgress("opt", "正在优化图片，请稍候...");
       try {
+        const source = qsa("input[name='gen-opt-source']").find((el) => el.checked)?.value || "library";
         const asset_id = (qs("#gen-opt-asset")?.value || "").trim();
-        const prompt = qs("#gen-prompt").value.trim();
-        const strength = Number(qs("#gen-opt-strength")?.value || 0.65);
+        let prompt = String(state.generatedPrompts.p || "").trim();
+        const strength = 0.65;
         const { width: w, height: h } = getSizeByPrefix("gen");
 
-        if (!asset_id) return alert("请选择要优化的图片");
-        if (!prompt) return alert("请先生成或填写提示词");
+        if (!prompt) {
+          await buildPromptForPrefix("p");
+          prompt = String(state.generatedPrompts.p || "").trim();
+        }
+        if (!prompt) return alert("当前无法生成提示词，请先补充商品信息");
+        const payload = {
+          prompt,
+          strength: Math.min(1, Math.max(0, strength)),
+          num_images: 1,
+          width: w,
+          height: h,
+        };
+        if (source === "library") {
+          if (!asset_id) return alert("请选择要优化的图片");
+          payload.asset_id = asset_id;
+        } else {
+          const file = state.optimizeLocalFile || localFileInput?.files?.[0];
+          if (!file) return alert("请选择本地图片");
+          if (state.optimizeLocalAssetId) {
+            payload.asset_id = state.optimizeLocalAssetId;
+          } else {
+            payload.image_base64 = await fileToDataUrl(file);
+            payload.local_filename = file.name || "local-image.png";
+          }
+        }
 
         const d = await api("/api/ai/optimize-by-prompt", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            asset_id,
-            prompt,
-            strength: Math.min(1, Math.max(0, strength)),
-            num_images: 1,
-            width: w,
-            height: h,
-          }),
+          body: JSON.stringify(payload),
         });
         const prev = qs("#gen-opt-result").innerHTML || "";
         const cards = (d.items || (d.item ? [d.item] : [])).map(card).join("");
@@ -475,13 +579,67 @@ function setupOptimize() {
 }
 
 function setupImageGenerate() {
+  const sourceInputs = qsa("input[name='g-source']");
+  const libraryBox = qs("#g-source-library");
+  const localBox = qs("#g-source-local");
+  const localFileInput = qs("#g-local-file");
+  const localName = qs("#g-local-name");
+
+  const syncGenerateSourceUI = () => {
+    const source = qsa("input[name='g-source']").find((el) => el.checked)?.value || "library";
+    if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
+    if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+  };
+
+  sourceInputs.forEach((el) => {
+    el.onchange = syncGenerateSourceUI;
+  });
+  if (localFileInput) {
+    localFileInput.onchange = async (ev) => {
+      const file = ev.target?.files?.[0] || null;
+      state.generateLocalFile = file;
+      state.generateLocalAssetId = "";
+      if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
+      if (!file) return;
+      try {
+        const image_base64 = await fileToDataUrl(file);
+        const d = await api("/api/assets/upload-base64", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            image_base64,
+            original_name: file.name || "local-image.png",
+          }),
+        });
+        state.generateLocalAssetId = d?.item?.asset_id || "";
+        await refreshAssets();
+        if (state.generateLocalAssetId && qs("#g-reference-asset")) {
+          qs("#g-reference-asset").value = state.generateLocalAssetId;
+        }
+        if (localName) {
+          localName.textContent = state.generateLocalAssetId
+            ? `已存入素材库: ${file.name}`
+            : `已选择: ${file.name}`;
+        }
+      } catch (e) {
+        if (localName) localName.textContent = `入库失败: ${file.name}`;
+        alert(e.message);
+      }
+    };
+  }
+  syncGenerateSourceUI();
+
   qs("#g-run").onclick = async () => {
     if (state.busy.gen) return;
     state.busy.gen = true;
     setDisabled(["#g-run"], true);
     const pg = startProgress("gen", "正在生成图片，请稍候...");
     try {
-      const prompt = qs("#g-prompt").value.trim();
+      let prompt = String(state.generatedPrompts.g || "").trim();
+      const source = qsa("input[name='g-source']").find((el) => el.checked)?.value || "library";
+      const reference_asset_id = source === "library"
+        ? (qs("#g-reference-asset")?.value || "").trim()
+        : String(state.generateLocalAssetId || "").trim();
       let html = "";
       if (prompt) {
         const { width: w, height: h } = getSizeByPrefix("g");
@@ -493,12 +651,29 @@ function setupImageGenerate() {
             provider: "qwen",
             width: w,
             height: h,
-            display_text: qs("#g-image-overlay-text").value || "",
+            reference_asset_id,
+          }),
+        });
+        html = card(d.item);
+      } else {
+        await buildPromptForPrefix("g");
+        prompt = String(state.generatedPrompts.g || "").trim();
+        if (!prompt) throw new Error("当前无法生成提示词，请先补充商品信息");
+        const { width: w, height: h } = getSizeByPrefix("g");
+        const d = await api("/api/ai/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt,
+            provider: "qwen",
+            width: w,
+            height: h,
+            reference_asset_id,
           }),
         });
         html = card(d.item);
       }
-      qs("#g-run-result").innerHTML = html || "<p>请先输入提示词</p>";
+      qs("#g-run-result").innerHTML = html || "<p>请先输入商品信息</p>";
       await refreshAssets();
       finishProgress(pg, "图片已生成");
     } catch (e) {
@@ -630,11 +805,54 @@ function setupBatchBg() {
     qs(`#${prefix}-clear-assets`).onclick = () => setSelected([]);
     setSelected(getSelected());
 
-    return { getSelected };
+    return { getSelected, setSelected, renderPicker };
   }
 
   const wmPicker = setupPicker("wm");
   const bgPicker = setupPicker("bg");
+
+  function wireBatchSource(prefix, picker, stateKey) {
+    const sourceInputs = qsa(`input[name='${prefix}-source']`);
+    const libraryBox = qs(`#${prefix}-source-library`);
+    const localBox = qs(`#${prefix}-source-local`);
+    const localInput = qs(`#${prefix}-local-files`);
+    const localName = qs(`#${prefix}-local-name`);
+
+    const syncUI = () => {
+      const source = qsa(`input[name='${prefix}-source']`).find((el) => el.checked)?.value || "library";
+      if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
+      if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+    };
+
+    sourceInputs.forEach((el) => {
+      el.onchange = syncUI;
+    });
+    if (localInput) {
+      localInput.onchange = async (ev) => {
+        const files = Array.from(ev.target?.files || []);
+        state[stateKey] = [];
+        if (localName) localName.textContent = files.length ? `已选择 ${files.length} 张，正在存入素材库...` : "未选择本地图片";
+        if (!files.length) {
+          picker.setSelected([]);
+          return;
+        }
+        try {
+          const items = await uploadFilesToLibrary(files);
+          state[stateKey] = items.map((x) => x.asset_id).filter(Boolean);
+          await refreshAssets();
+          picker.setSelected(state[stateKey]);
+          if (localName) localName.textContent = `已存入素材库: ${items.length} 张`;
+        } catch (e) {
+          if (localName) localName.textContent = "本地图片入库失败";
+          alert(e.message);
+        }
+      };
+    }
+    syncUI();
+  }
+
+  wireBatchSource("wm", wmPicker, "wmLocalAssetIds");
+  wireBatchSource("bg", bgPicker, "bgLocalAssetIds");
 
   async function runBatch(prefix, doWm, doBg, getSelected) {
     if (state.busy[prefix]) return;
@@ -695,6 +913,26 @@ function imageToDataUrl(img) {
   cctx.clearRect(0, 0, c.width, c.height);
   cctx.drawImage(img, 0, 0, c.width, c.height);
   return c.toDataURL("image/png");
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("本地图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function uploadFilesToLibrary(files) {
+  const list = Array.from(files || []).filter(Boolean);
+  if (!list.length) return [];
+  const fd = new FormData();
+  for (const f of list) fd.append("files", f);
+  const res = await fetch("/api/assets/upload-batch", { method: "POST", body: fd });
+  const data = await res.json();
+  if (!res.ok || !data.ok) throw new Error(data.error || "上传失败");
+  return data.items || [];
 }
 
 function getEditorTextFontFamily(vRaw = null) {
@@ -2186,8 +2424,13 @@ function bindLayerEditorControls() {
       ctx.fillRect(0, 0, canvasEl.width, canvasEl.height);
     }
     state.layerEditor = null;
+    state.layerLocalAssetId = "";
     const layerSel = qs("#layer-asset");
     if (layerSel) layerSel.value = "";
+    const layerLocalFile = qs("#layer-local-file");
+    if (layerLocalFile) layerLocalFile.value = "";
+    const layerLocalName = qs("#layer-local-name");
+    if (layerLocalName) layerLocalName.textContent = "未选择本地图片";
     const boxBtn = qs("#layer-cutout-box-mode");
     if (boxBtn) boxBtn.textContent = "框选截取区域（拖拽鼠标）";
     const txt = qs("#txt-content");
@@ -2347,6 +2590,46 @@ async function setupLayerEditorFromImage(img, assetId = "") {
 }
 
 function setupLayer() {
+  const sourceInputs = qsa("input[name='layer-source']");
+  const libraryBox = qs("#layer-source-library");
+  const localBox = qs("#layer-source-local");
+  const localInput = qs("#layer-local-file");
+  const localName = qs("#layer-local-name");
+
+  const syncLayerSourceUI = () => {
+    const source = qsa("input[name='layer-source']").find((el) => el.checked)?.value || "library";
+    if (libraryBox) libraryBox.style.display = source === "library" ? "block" : "none";
+    if (localBox) localBox.style.display = source === "local" ? "block" : "none";
+  };
+
+  sourceInputs.forEach((el) => {
+    el.onchange = syncLayerSourceUI;
+  });
+  if (localInput) {
+    localInput.onchange = async (ev) => {
+      const file = ev.target?.files?.[0] || null;
+      state.layerLocalAssetId = "";
+      if (localName) localName.textContent = file ? `已选择: ${file.name}，正在存入素材库...` : "未选择本地图片";
+      if (!file) return;
+      try {
+        const items = await uploadFilesToLibrary([file]);
+        const item = items[0];
+        state.layerLocalAssetId = item?.asset_id || "";
+        await refreshAssets();
+        if (state.layerLocalAssetId && qs("#layer-asset")) {
+          qs("#layer-asset").value = state.layerLocalAssetId;
+        }
+        renderLayerSelectedAsset();
+        await previewSelectedAssetOnLayerCanvas();
+        if (localName) localName.textContent = state.layerLocalAssetId ? `已存入素材库: ${file.name}` : `已选择: ${file.name}`;
+      } catch (e) {
+        if (localName) localName.textContent = `入库失败: ${file.name}`;
+        alert(e.message);
+      }
+    };
+  }
+  syncLayerSourceUI();
+
   qs("#layer-asset").addEventListener("change", async () => {
     renderLayerSelectedAsset();
     await previewSelectedAssetOnLayerCanvas();

@@ -433,6 +433,19 @@ def load_image(asset_id: str) -> Image.Image:
     return Image.open(get_asset_path(asset_id)).convert("RGB")
 
 
+def load_image_from_base64(image_base64: str) -> Image.Image:
+    b64 = str(image_base64 or "").strip()
+    if not b64:
+        raise ValueError("image_base64 不能为空")
+    if "," in b64:
+        b64 = b64.split(",", 1)[1]
+    try:
+        raw = base64.b64decode(b64)
+        return Image.open(io.BytesIO(raw)).convert("RGB")
+    except Exception:
+        raise ValueError("image_base64 无效")
+
+
 def delete_assets(asset_ids: List[str]) -> Dict[str, Any]:
     with STORE_LOCK:
         images_dir = current_store_paths()["images"]
@@ -1003,14 +1016,16 @@ def api_ai_generate():
 def api_ai_optimize_by_prompt():
     data = get_json_data()
     asset_id = str(data.get("asset_id", "")).strip()
+    image_base64 = str(data.get("image_base64", "")).strip()
+    local_filename = str(data.get("local_filename", "")).strip()
     prompt = str(data.get("prompt", "")).strip()
     strength = float(data.get("strength", 0.65))
     num_images = int(data.get("num_images", 1))
     width = int(data.get("width", 1024))
     height = int(data.get("height", 1024))
 
-    if not asset_id:
-        raise ValueError("asset_id 不能为空")
+    if not asset_id and not image_base64:
+        raise ValueError("asset_id 或 image_base64 至少提供一个")
     if not prompt:
         raise ValueError("prompt 不能为空")
 
@@ -1018,7 +1033,14 @@ def api_ai_optimize_by_prompt():
     height = min(max(height, 512), 1536)
     num_images = min(max(num_images, 1), 6)
     strength = float(np.clip(strength, 0.0, 1.0))
-    src_img = load_image(asset_id)
+    if image_base64:
+        src_img = load_image_from_base64(image_base64)
+        source_ref = f"upload:{local_filename or 'local-image'}"
+        output_name = derive_output_name(local_filename or "local-image.png", "优化")
+    else:
+        src_img = load_image(asset_id)
+        source_ref = asset_id
+        output_name = derive_output_name_from_asset(asset_id, "优化")
     items: List[Dict[str, Any]] = []
     variations: List[Dict[str, Any]] = []
     for i in range(num_images):
@@ -1033,8 +1055,8 @@ def api_ai_optimize_by_prompt():
         )
         item = save_asset(
             out_img,
-            source=f"qwen_opt_prompt:{asset_id}",
-            original_name=derive_output_name_from_asset(asset_id, "优化"),
+            source=f"qwen_opt_prompt:{source_ref}",
+            original_name=output_name,
             preserve_filename=True,
         )
         item["url"] = f"/file/images/{item['filename']}"
@@ -1049,7 +1071,9 @@ def api_ai_optimize_by_prompt():
         "item": items[0],
         "items": items,
         "total": len(items),
-        "asset_id": asset_id,
+        "asset_id": asset_id or None,
+        "source_type": "local" if image_base64 else "library",
+        "local_filename": local_filename or None,
         "used_prompt": prompt,
         "strength": strength,
         "num_images": num_images,
@@ -1064,14 +1088,7 @@ def api_layer_cutout_preview():
     asset_id = str(data.get("asset_id", "")).strip()
     image_base64 = str(data.get("image_base64", "")).strip()
     if image_base64:
-        b64 = image_base64
-        if "," in b64:
-            b64 = b64.split(",", 1)[1]
-        try:
-            raw = base64.b64decode(b64)
-            src_img = Image.open(io.BytesIO(raw)).convert("RGB")
-        except Exception:
-            raise ValueError("image_base64 无效")
+        src_img = load_image_from_base64(image_base64)
     else:
         if not asset_id:
             raise ValueError("asset_id 不能为空")

@@ -187,6 +187,24 @@ h2 { margin: 0 0 8px; font-family: "Manrope", sans-serif; font-size: 24px; line-
 .form-grid.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .form-grid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .form-grid.one { grid-template-columns: 1fr; }
+.layer-source-row { align-items: start; }
+.layer-source-row > .btn { align-self: start; }
+.layer-source-row > div {
+  min-height: 44px;
+}
+.layer-source-row > div > select,
+.layer-source-row > div > input[type="file"] {
+  min-height: 44px;
+  width: 100%;
+}
+#gen-opt-source-library,
+#gen-opt-source-local {
+  width: 100%;
+}
+#gen-opt-source-library > select,
+#gen-opt-source-local > input[type="file"] {
+  width: 100%;
+}
 
 input, select, textarea, .btn {
   border: 1px solid var(--line);
@@ -204,9 +222,6 @@ textarea { resize: vertical; min-height: 46px; }
   min-height: 118px;
   width: 100%;
 }
-#image-overlay-text,
-#g-image-overlay-text { width: 100%; }
-#p-build { width: 100%; }
 
 .btn { background: #edf5ff; color: #25476a; cursor: pointer; min-height: 44px; }
 .btn.primary { background: linear-gradient(135deg, var(--primary), var(--primary2)); color: #fff; border-color: transparent; font-weight: 700; }

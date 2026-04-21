@@ -16,6 +16,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 logger = logging.getLogger(__name__)
 _QWEN_RUNTIME_LOGGED = False
 _QWEN_DEFAULT_BASE_URL = "https://dashscope-intl.aliyuncs.com"
+_QWEN_DEFAULT_IMAGE_MODEL = "qwen-image-2.0-2026-03-03"
+_QWEN_DEFAULT_EDIT_MODEL = "qwen-image-2.0-pro"
 
 
 def _resolve_qwen_base_url() -> str:
@@ -23,18 +25,37 @@ def _resolve_qwen_base_url() -> str:
     return base
 
 
+def _resolve_qwen_models() -> Tuple[str, str]:
+    image_model_env = os.getenv("QWEN_IMAGE_MODEL", "").strip()
+    edit_model_env = os.getenv("QWEN_IMAGE_EDIT_MODEL", "").strip()
+
+    image_model = image_model_env or _QWEN_DEFAULT_IMAGE_MODEL
+    edit_model = edit_model_env or _QWEN_DEFAULT_EDIT_MODEL
+
+    # Older env files used QWEN_IMAGE_MODEL for an edit-only model name.
+    # Recover automatically so generation still targets a text-to-image model.
+    if "edit" in image_model.lower() and not edit_model_env:
+        edit_model = image_model
+        image_model = _QWEN_DEFAULT_IMAGE_MODEL
+
+    return image_model, edit_model
+
+
 def _resolve_qwen_runtime_config() -> Dict[str, str]:
     base = _resolve_qwen_base_url()
-    image_api_url = os.getenv("QWEN_IMAGE_API_URL", "").strip() or f"{base}/compatible-mode/v1/images/generations"
+    multimodal_generation_url = f"{base}/api/v1/services/aigc/multimodal-generation/generation"
+    async_t2i_url = f"{base}/api/v1/services/aigc/text2image/image-synthesis"
+    compatible_image_api_url = f"{base}/compatible-mode/v1/images/generations"
+    image_api_url = os.getenv("QWEN_IMAGE_API_URL", "").strip() or multimodal_generation_url
     mm_base_api_url = os.getenv("QWEN_MM_BASE_API_URL", "").strip() or f"{base}/api/v1"
-    image_model = os.getenv("QWEN_IMAGE_MODEL", "qwen-image-2.0-2026-03-03").strip()
-    edit_model = os.getenv("QWEN_IMAGE_EDIT_MODEL", "qwen-image-2.0-pro").strip()
-    native_t2i_url = f"{base}/api/v1/services/aigc/text2image/image-synthesis"
+    image_model, edit_model = _resolve_qwen_models()
     return {
         "base_url": base,
         "image_api_url": image_api_url,
+        "compatible_image_api_url": compatible_image_api_url,
         "mm_base_api_url": mm_base_api_url,
-        "native_t2i_url": native_t2i_url,
+        "multimodal_generation_url": multimodal_generation_url,
+        "async_t2i_url": async_t2i_url,
         "image_model": image_model,
         "edit_model": edit_model,
     }
@@ -170,6 +191,20 @@ def generate_image_via_qwen(prompt: str, w: int, h: int) -> Image.Image:
                 ir = requests.get(url, timeout=60)
                 ir.raise_for_status()
                 return Image.open(io.BytesIO(ir.content)).convert("RGB")
+
+        choices = output.get("choices") or []
+        if isinstance(choices, list) and choices:
+            message = (choices[0] or {}).get("message") or {}
+            content = message.get("content") or []
+            if isinstance(content, list):
+                for part in content:
+                    if not isinstance(part, dict):
+                        continue
+                    url = part.get("image")
+                    if isinstance(url, str) and url:
+                        ir = requests.get(url, timeout=60)
+                        ir.raise_for_status()
+                        return Image.open(io.BytesIO(ir.content)).convert("RGB")
         return None
 
     def extract_task_id(obj: Dict[str, Any]) -> str:
@@ -190,26 +225,45 @@ def generate_image_via_qwen(prompt: str, w: int, h: int) -> Image.Image:
 
     errors: List[str] = []
 
-    def is_native_text2img_url(url: str) -> bool:
+    def is_multimodal_generation_url(url: str) -> bool:
+        return "/api/v1/services/aigc/multimodal-generation/generation" in url
+
+    def is_async_text2img_url(url: str) -> bool:
         return "/api/v1/services/aigc/text2image/image-synthesis" in url
 
-    native_url = cfg["native_t2i_url"]
+    multimodal_url = cfg["multimodal_generation_url"]
+    async_t2i_url = cfg["async_t2i_url"]
+    compatible_url = cfg["compatible_image_api_url"]
+    configured_url = api_url
 
+    multimodal_payload = {
+        "model": model,
+        "input": {"messages": [{"role": "user", "content": [{"text": prompt}]}]},
+        "parameters": {"size": size_native, "watermark": False, "prompt_extend": True},
+    }
+    async_payload = {"model": model, "input": {"prompt": prompt}, "parameters": {"size": size_native}}
+    compat_payload = {"model": model, "prompt": prompt, "size": size_compat}
     first_payload = (
-        {"model": model, "input": {"prompt": prompt}, "parameters": {"size": size_native}}
-        if is_native_text2img_url(api_url)
-        else {"model": model, "prompt": prompt, "size": size_compat}
+        multimodal_payload
+        if is_multimodal_generation_url(api_url)
+        else async_payload
+        if is_async_text2img_url(api_url)
+        else compat_payload
     )
-    second_payload = {"model": model, "input": {"prompt": prompt}, "parameters": {"size": size_native}}
-    try_urls: List[Tuple[str, Dict[str, Any]]] = [(api_url, first_payload)]
-    if native_url != api_url:
-        try_urls.append((native_url, second_payload))
+
+    try_urls: List[Tuple[str, Dict[str, Any]]] = [(configured_url, first_payload)]
+    if configured_url != multimodal_url:
+        try_urls.append((multimodal_url, multimodal_payload))
+    if model in ("qwen-image", "qwen-image-plus") and configured_url != async_t2i_url:
+        try_urls.append((async_t2i_url, async_payload))
+    if compatible_url not in (configured_url, multimodal_url, async_t2i_url):
+        try_urls.append((compatible_url, compat_payload))
 
     for url, payload in try_urls:
         try:
             r = _post_json_with_rate_retry(url, headers, payload, timeout=90, max_retries=2)
             if r.status_code >= 400:
-                if r.status_code == 403 and "synchronous calls" in r.text.lower():
+                if r.status_code == 403 and "synchronous calls" in r.text.lower() and is_async_text2img_url(url):
                     async_headers = dict(headers)
                     async_headers["X-DashScope-Async"] = "enable"
                     ar = _post_json_with_rate_retry(url, async_headers, payload, timeout=90, max_retries=2)

@@ -47,14 +47,25 @@
 
     <section id="pane-optimize" class="card pane active">
       <h2>AI图片优化</h2>
-      <p class="hint">先完成提示词，再按提示词优化现有图片。</p>
-      <div class="guide-strip">
-        <span class="guide-pill">步骤 1：填写卖点并生成提示词</span>
-        <span class="guide-pill">步骤 2：按提示词优化现有图片</span>
-      </div>
+      <p class="hint">根据输入自动在后台生成提示词，并直接用于优化现有图片。</p>
 
       <div class="feature-block builder-block">
-        <h3>步骤 1：生成与编辑提示词</h3>
+        <p class="hint">先选择要优化的图片，再填写优化需求。</p>
+        <div class="form-grid two compact-two">
+          <label><input type="radio" name="gen-opt-source" value="library" checked /> 从素材库选取</label>
+          <label><input type="radio" name="gen-opt-source" value="local" /> 从本地选取</label>
+        </div>
+        <div class="form-grid one">
+          <div id="gen-opt-source-library">
+            <select id="gen-opt-asset">
+              <option value="">选择要优化的图片</option>
+            </select>
+          </div>
+          <div id="gen-opt-source-local" style="display:none;">
+            <input id="gen-opt-file" type="file" accept="image/png,image/jpeg,image/webp" />
+            <div id="gen-opt-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
+          </div>
+        </div>
         <div class="form-grid four">
           <input id="p-product-name" placeholder="产品名称，如：轻盐苏打饼干" />
           <select id="gen-size">
@@ -71,14 +82,6 @@
           <input id="gen-custom-width" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义宽度" style="display:none;" />
           <input id="gen-custom-height" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义高度" style="display:none;" />
         </div>
-        <p class="hint">建议先填卖点再生成提示词。尺寸会写入提示词并用于生成；自定义尺寸范围 256-2048。</p>
-        <div class="form-grid two">
-          <select id="p-mode">
-            <option value="template">模板模式（稳定）</option>
-            <option value="hybrid">模板+LLM混合模式（更智能）</option>
-          </select>
-          <div id="p-mode-tip" class="hint-inline">建议先用模板模式，满意后切混合模式精修。</div>
-        </div>
 
         <div class="form-grid one">
           <input id="p-selling-primary" placeholder="主要卖点（建议含：产品名称/核心卖点）" />
@@ -87,32 +90,9 @@
           <input id="p-selling-secondary" placeholder="次要卖点（建议含：适用人群/期望场景）" />
         </div>
         <div class="form-grid one">
-          <textarea id="p-selling-other" rows="3" placeholder="其他卖点（建议含具体参数等）"></textarea>
+          <textarea id="p-selling-other" rows="3" placeholder="其他卖点/优化建议（建议含具体参数、风格、构图、背景、质感等）"></textarea>
         </div>
-
-        <input id="image-overlay-text" placeholder="图片上要展示的文字（可选；留空则不展示任何文字）" />
-        <div class="form-grid one">
-          <button class="btn primary" id="p-build">生成提示词</button>
-        </div>
-        <textarea id="gen-prompt" rows="3" placeholder="这里会生成提示词，也可手动修改"></textarea>
-      </div>
-
-      <div class="feature-block gen-step-card">
-        <div class="gen-step-head">
-          <span class="gen-step-kicker">步骤 2</span>
-          <h3>按提示词优化现有图片</h3>
-        </div>
-        <p class="hint">选择一张已有素材图，直接用上方提示词进行优化（图生图），适合“在原图基础上改风格/改质感/改背景”。</p>
-        <div class="form-grid one">
-          <select id="gen-opt-asset">
-            <option value="">选择要优化的图片</option>
-          </select>
-        </div>
-        <div class="form-grid two compact-two">
-          <input id="gen-opt-strength" type="number" min="0" max="1" step="0.05" value="0.65" placeholder="优化强度 0-1" />
-          <div class="hint-inline stable-inline">每次固定生成 1 张</div>
-        </div>
-        <p class="hint">`0.65` 是优化强度：越接近 `1` 改动越明显，越接近 `0` 越保留原图。默认保留商品主体，只按提示词优化画面表现。建议每次生成一张图片。</p>
+        <p class="hint">默认保留商品主体，只按提示词优化画面表现。每次固定生成 1 张。</p>
         <div class="form-grid one feature-cta gen-step-cta">
           <button class="btn primary" id="gen-opt-run">按提示词优化图片</button>
         </div>
@@ -131,14 +111,25 @@
 
     <section id="pane-generate" class="card pane">
       <h2>AI图片生成</h2>
-      <p class="hint">先完成提示词，再按提示词直接生成图片。</p>
-      <div class="guide-strip">
-        <span class="guide-pill">步骤 1：填写卖点并生成提示词</span>
-        <span class="guide-pill">步骤 2：按提示词直接生成图片</span>
-      </div>
+      <p class="hint">根据输入自动在后台生成提示词，并直接用于生成图片。</p>
 
       <div class="feature-block builder-block">
-        <h3>步骤 1：生成与编辑提示词</h3>
+        <p class="hint">先选择参考图片，再填写生成需求。</p>
+        <div class="form-grid two compact-two">
+          <label><input type="radio" name="g-source" value="library" checked /> 从素材库选取</label>
+          <label><input type="radio" name="g-source" value="local" /> 从本地选取</label>
+        </div>
+        <div class="form-grid one">
+          <div id="g-source-library">
+            <select id="g-reference-asset">
+              <option value="">选择参考图片</option>
+            </select>
+          </div>
+          <div id="g-source-local" style="display:none;">
+            <input id="g-local-file" type="file" accept="image/png,image/jpeg,image/webp" />
+            <div id="g-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
+          </div>
+        </div>
         <div class="form-grid four">
           <input id="g-product-name" placeholder="产品名称，如：轻盐苏打饼干" />
           <select id="g-size">
@@ -155,14 +146,6 @@
           <input id="g-custom-width" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义宽度" style="display:none;" />
           <input id="g-custom-height" type="number" min="256" max="2048" step="1" value="1024" placeholder="自定义高度" style="display:none;" />
         </div>
-        <p class="hint">建议先填卖点再生成提示词。尺寸会写入提示词并用于生成；自定义尺寸范围 256-2048。</p>
-        <div class="form-grid two">
-          <select id="g-mode">
-            <option value="template">模板模式（稳定）</option>
-            <option value="hybrid">模板+LLM混合模式（更智能）</option>
-          </select>
-          <div id="g-mode-tip" class="hint-inline">建议先用模板模式，满意后切混合模式精修。</div>
-        </div>
         <div class="form-grid one">
           <input id="g-selling-primary" placeholder="主要卖点（建议含：产品名称/核心卖点）" />
         </div>
@@ -170,19 +153,7 @@
           <input id="g-selling-secondary" placeholder="次要卖点（建议含：适用人群/期望场景）" />
         </div>
         <div class="form-grid one">
-          <textarea id="g-selling-other" rows="3" placeholder="其他卖点（建议含具体参数等）"></textarea>
-        </div>
-        <input id="g-image-overlay-text" placeholder="图片上要展示的文字（可选；留空则不展示任何文字）" />
-        <div class="form-grid one">
-          <button class="btn primary" id="g-build">生成提示词</button>
-        </div>
-        <textarea id="g-prompt" rows="3" placeholder="这里会生成提示词，也可手动修改"></textarea>
-      </div>
-
-      <div class="feature-block gen-step-card">
-        <div class="gen-step-head">
-          <span class="gen-step-kicker">步骤 2</span>
-          <h3>按提示词直接生成图片</h3>
+          <textarea id="g-selling-other" rows="3" placeholder="其他卖点/优化建议（建议含具体参数、风格、构图、背景、质感等）"></textarea>
         </div>
         <p class="hint">直接基于提示词生成全新图片，每次固定生成 1 张。生成结果会自动加入素材库，可在素材库中重命名、下载和删除。</p>
         <div class="form-grid one feature-cta gen-step-cta">
@@ -212,9 +183,19 @@
       <div class="feature-columns bg-columns">
         <div class="feature-block">
           <h3>步骤 1：选择要处理的图片</h3>
+          <div class="form-grid two compact-two">
+            <label><input type="radio" name="wm-source" value="library" checked /> 从素材库选取</label>
+            <label><input type="radio" name="wm-source" value="local" /> 从本地上传</label>
+          </div>
+          <div id="wm-source-library">
           <div class="form-grid two">
             <button class="btn primary" id="wm-pick-assets">从素材库选择（多选）</button>
             <button class="btn" id="wm-clear-assets">清空已选</button>
+          </div>
+          </div>
+          <div id="wm-source-local" style="display:none;">
+            <input id="wm-local-files" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+            <div id="wm-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
           </div>
           <div class="hint-inline">已选择 <b id="wm-selected-count">0 张</b> 图片</div>
           <input id="wm-asset-ids" type="hidden" />
@@ -252,9 +233,19 @@
       <div class="feature-columns bg-columns">
         <div class="feature-block">
           <h3>步骤 1：选择要处理的图片</h3>
+          <div class="form-grid two compact-two">
+            <label><input type="radio" name="bg-source" value="library" checked /> 从素材库选取</label>
+            <label><input type="radio" name="bg-source" value="local" /> 从本地上传</label>
+          </div>
+          <div id="bg-source-library">
           <div class="form-grid two">
             <button class="btn primary" id="bg-pick-assets">从素材库选择（多选）</button>
             <button class="btn" id="bg-clear-assets">清空已选</button>
+          </div>
+          </div>
+          <div id="bg-source-local" style="display:none;">
+            <input id="bg-local-files" type="file" accept="image/png,image/jpeg,image/webp" multiple />
+            <div id="bg-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
           </div>
           <div class="hint-inline">已选择 <b id="bg-selected-count">0 张</b> 图片</div>
           <input id="bg-asset-ids" type="hidden" />
@@ -286,10 +277,20 @@
 
     <section id="pane-layer" class="card pane">
       <h2>图片在线编辑</h2>
-      <p class="hint">选择素材后直接进入在线编辑，可调整画面效果、加文字、下载或保存到素材库。</p>
+      <p class="hint">支持从素材库选择或本地上传。选中后直接进入在线编辑，可调整画面效果、加文字、下载或保存到素材库。</p>
 
-      <div class="form-grid two">
-        <select id="layer-asset"></select>
+      <div class="form-grid two compact-two">
+        <label><input type="radio" name="layer-source" value="library" checked /> 从素材库选取</label>
+        <label><input type="radio" name="layer-source" value="local" /> 从本地上传</label>
+      </div>
+      <div class="form-grid two layer-source-row">
+        <div id="layer-source-library">
+          <select id="layer-asset"></select>
+        </div>
+        <div id="layer-source-local" style="display:none;">
+          <input id="layer-local-file" type="file" accept="image/png,image/jpeg,image/webp" />
+          <div id="layer-local-name" class="hint-inline" style="margin-top:8px;">未选择本地图片</div>
+        </div>
         <button class="btn primary" id="layer-compose">保存编辑结果</button>
       </div>
       <div id="layer-selected-box" class="hint-inline">未选择素材</div>
